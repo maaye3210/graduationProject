@@ -1,3 +1,5 @@
 cache
 graph
 .osmnx*
+/.ipynb_checkpoints/
+.idea
