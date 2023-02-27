@@ -18,3 +18,4 @@ distance = nx.shortest_path_length(G, origin_node, destination_node, weight='len
 
 fig, ax = ox.plot_graph_route(G, route, bbox=get_box(origin_point, destination_point))  # 可视化结果
 print('距离：' + str(distance))  # 输出最短路径距离
+x1=37.53184&y1=122.07468&x1=37.50542&y1=122.11810
