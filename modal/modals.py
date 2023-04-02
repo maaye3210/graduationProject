@@ -1,6 +1,5 @@
 import os
 import pickle
-import sys
 
 from sympy import diff
 from sympy import symbols
@@ -43,28 +42,18 @@ class Modal:
         print(f'开始创建{name}实例')
         self.name = name  # 名字
         self.g = 9.8  # 重力加速度 g/（m/s2）
-        energy = self.__private_create_consumption_weight_fn()
-        velocity = self.__private_create_velocity_weight_fn()
-        self.weight_fn = {
-            'energy': energy,
-            'velocity': velocity
-        }
+        self.weight_fn = {}
 
-    def __private_create_consumption_weight_fn(self):
-        def consumption_weight_fn(start_node_id, end_node_id, edge):
-            return 1
+    # 从本地读取计算好的结果
+    def get_average_from_local(self, weight_name):
+        with open(f'{dir_path}/data/{self.name}_{weight_name}', 'rb') as f:
+            return pickle.load(f)
 
-        return consumption_weight_fn
-
-    def __private_create_velocity_weight_fn(self):
-        def velocity_weight_fn(start_node_id, end_node_id, edge):
-            return 1
-
-        return velocity_weight_fn
-
+    # 获取需要的权重函数
     def get_weight_fn(self, weight_fn_type):
         return self.weight_fn[weight_fn_type]
 
+    # 计算所所有平均消耗并进行本地化
     def localization(self):
         return
 
@@ -94,37 +83,37 @@ class ElectricVehicle(Modal):
             'velocity': velocity
         }
 
-    def E_1(self, v1, v2, t1, t2):
-        t = symbols("t")  # 需要进行求导的变量t
-        a = (v2 - v1) / (t2 - t1)
-        v0 = v1 - a * t1
-        v = v0 + a * t  # 汽车行驶速度v(t)
-
-        return integrate(1 / (self.eta_T * self.eta_m * self.eta_b) * (
-                (self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140 + diff(
-            (self.delta * self.m * v) / 3600, t)), (t, t1, t2))
-
-    # 匀速阶段
-    def E_2(self, v, t):
-        return t / (self.eta_T * self.eta_m * self.eta_b) * (
-                (self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140)
-
-    # 制动阶段
-    def E_3(self, v1, v2, t1, t2):
-        t = symbols("t")  # 需要进行求导的变量t
-        a = (v2 - v1) / (t2 - t1)
-        v0 = v1 - a * t1
-        v = v0 + a * t  # 汽车行驶速度v(t)
-        return (1 / 3.6) ** 3 * ((1 - self.eta_c) / (10 ** 6 * self.eta_T * self.eta_m * self.eta_b)) * (
-                (1 / 2 * self.m * v2 ** 2) - (1 / 2 * self.m * v1 ** 2)) - (
-                self.k * self.eta_c * integrate(
-            (self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140 + diff(
-                (self.delta * self.m * v) / 3600, t),
-            (t, t1, t2)
-        ) / (self.eta_T * self.eta_m * self.eta_b)
-        )
-
+    # 获取不同工况的平均耗能（kj/m）
     def get_average_consumption(self):
+        def E_1(v1, v2, t1, t2):
+            t = symbols("t")  # 需要进行求导的变量t
+            a = (v2 - v1) / (t2 - t1)
+            v0 = v1 - a * t1
+            v = v0 + a * t  # 汽车行驶速度v(t)
+
+            return integrate(1 / (self.eta_T * self.eta_m * self.eta_b) * (
+                    (self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140 + diff(
+                (self.delta * self.m * v) / 3600, t)), (t, t1, t2))
+
+        # 匀速阶段
+        def E_2(v, t):
+            return t / (self.eta_T * self.eta_m * self.eta_b) * (
+                    (self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140)
+
+        # 制动阶段
+        def E_3(v1, v2, t1, t2):
+            t = symbols("t")  # 需要进行求导的变量t
+            a = (v2 - v1) / (t2 - t1)
+            v0 = v1 - a * t1
+            v = v0 + a * t  # 汽车行驶速度v(t)
+            return (1 / 3.6) ** 3 * ((1 - self.eta_c) / (10 ** 6 * self.eta_T * self.eta_m * self.eta_b)) * (
+                    (1 / 2 * self.m * v2 ** 2) - (1 / 2 * self.m * v1 ** 2)) - (
+                    self.k * self.eta_c * integrate(
+                (self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140 + diff(
+                    (self.delta * self.m * v) / 3600, t),
+                (t, t1, t2)
+            ) / (self.eta_T * self.eta_m * self.eta_b)
+            )
         res = {}
         for key, condition in conditions.items():
             consume = 0
@@ -133,22 +122,19 @@ class ElectricVehicle(Modal):
                 [cur_time, cur_velocity] = condition[i]
                 [next_time, next_velocity] = condition[i + 1]
                 if cur_velocity == next_velocity:
-                    consume += self.E_2(cur_velocity, next_time - cur_time)
+                    consume += E_2(cur_velocity, next_time - cur_time)
                 elif cur_velocity >= next_velocity:
-                    consume += self.E_3(cur_velocity, next_velocity, cur_time, next_time)
+                    consume += E_3(cur_velocity, next_velocity, cur_time, next_time)
                 else:
-                    consume += self.E_1(cur_velocity, next_velocity, cur_time, next_time)
+                    consume += E_1(cur_velocity, next_velocity, cur_time, next_time)
             res[key] = consume / distance * 1.05
         return res
-
-    def get_average_consumption_from_local(self):
-        with open(f'{dir_path}/data/{self.name}_energy', 'rb') as f:
-            return pickle.load(f)
 
     # 构造规划最小能耗所需的权重计算函数
     def __private_create_consumption_weight_fn(self):
         # 计算各种工况下的平均能耗（kW·h/km）
-        average_consumption = self.get_average_consumption_from_local()
+        average_consumption = self.get_average_from_local('energy')
+        print(average_consumption)
 
         # 权重计算函数
         def weight_fn(start_node_id, end_node_id, edge):
@@ -163,6 +149,7 @@ class ElectricVehicle(Modal):
 
         return weight_fn
 
+    # 获取不同工况的平均耗时（m/s）
     @staticmethod
     def get_average_velocity():
         res = {}
@@ -171,14 +158,14 @@ class ElectricVehicle(Modal):
             res[key] = distance / 500
         return res
 
-    def get_average_velocity_from_local(self):
-        with open(f'{dir_path}/data/{self.name}_velocity', 'rb') as f:
-            return pickle.load(f)
-
     # 构造规划最快速度所需的权重计算函数
     def __private_create_velocity_weight_fn(self):
         # 计算各种工况下的平均速度（kW·h/km）
-        average_velocity = self.get_average_velocity_from_local()
+        average_velocity = self.get_average_from_local('velocity')
+        average_velocity['congestion'] += 5
+        average_velocity['normal'] -= 3
+        average_velocity['unobstructed'] -= 15
+        print(average_velocity)
 
         def velocity_weight_fn(start_node_id, end_node_id, edge):
             highway_type = edge[0]['highway']
@@ -190,6 +177,7 @@ class ElectricVehicle(Modal):
 
         return velocity_weight_fn
 
+    # 计算所所有平均消耗并进行本地化
     def localization(self):
         print('开始构造最小能耗权重计算函数')
         energy = self.get_average_consumption()
@@ -226,16 +214,16 @@ class TraditionalVehicle(Modal):
             'velocity': velocity
         }
 
-    def E(self, v1, v2, t1, t2):
-        t = symbols("t")  # 需要进行求导的变量t
-        a = (v2 - v1) / (t2 - t1)
-        v0 = v1 - a * t1
-        v = v0 + a * t  # 汽车行驶速度v(t)
-
-        return integrate((self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140 + (
-                self.delta * self.m * v) * diff(v, t) / 3600, (t, t1, t2)) / self.eta_T
-
+    # 获取不同工况的平均耗能（kj/m）
     def get_average_consumption(self):
+        def E(v1, v2, t1, t2):
+            t = symbols("t")  # 需要进行求导的变量t
+            a = (v2 - v1) / (t2 - t1)
+            v0 = v1 - a * t1
+            v = v0 + a * t  # 汽车行驶速度v(t)
+
+            return integrate((self.m * self.g * self.f * v) / 3600 + (self.C_D * self.A * v ** 3) / 76140 + (
+                    self.delta * self.m * v) * diff(v, t) / 3600, (t, t1, t2)) / self.eta_T
         res = {}
         for key, condition in conditions.items():
             consume = 0
@@ -243,16 +231,16 @@ class TraditionalVehicle(Modal):
             for i in range(len(condition) - 1):
                 [cur_time, cur_velocity] = condition[i]
                 [next_time, next_velocity] = condition[i + 1]
-                consume += self.E(cur_velocity, next_velocity, cur_time, next_time)
+                consume += E(cur_velocity, next_velocity, cur_time, next_time)
             res[key] = consume / distance * 3
         return res
 
-    def get_average_consumption_from_local(self):
-        with open(f'{dir_path}/data/{self.name}_energy', 'rb') as f:
-            return pickle.load(f)
-
+    # 构造规划最小能耗所需的权重计算函数
     def __private_create_consumption_weight_fn(self):
-        average_consumption = self.get_average_consumption_from_local()
+        average_consumption = self.get_average_from_local('energy')
+        average_consumption['congestion'] += 0.5
+        average_consumption['unobstructed'] -= 0.2
+        print(average_consumption)
 
         def consumption_weight_fn(start_node_id, end_node_id, edge):
             highway_type = edge[0]['highway']
@@ -262,6 +250,7 @@ class TraditionalVehicle(Modal):
 
         return consumption_weight_fn
 
+    # 获取不同工况的平均耗时（m/s）
     @staticmethod
     def get_average_velocity():
         res = {}
@@ -270,12 +259,13 @@ class TraditionalVehicle(Modal):
             res[key] = distance / 500
         return res
 
-    def get_average_velocity_from_local(self):
-        with open(f'{dir_path}/data/{self.name}_velocity', 'rb') as f:
-            return pickle.load(f)
-
+    # 构造规划最快速度所需的权重计算函数
     def __private_create_velocity_weight_fn(self):
-        average_velocity = self.get_average_velocity_from_local()
+        average_velocity = self.get_average_from_local('velocity')
+        average_velocity['congestion'] += 5
+        average_velocity['normal'] -= 3
+        average_velocity['unobstructed'] -= 15
+        print(average_velocity)
 
         def velocity_weight_fn(start_node_id, end_node_id, edge):
             highway_type = edge[0]['highway']
@@ -285,6 +275,7 @@ class TraditionalVehicle(Modal):
 
         return velocity_weight_fn
 
+    # 计算所所有平均消耗并进行本地化
     def localization(self):
         print('开始构造最小能耗权重计算函数')
         energy = self.get_average_consumption()

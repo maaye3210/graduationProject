@@ -42,7 +42,7 @@ def weight_route():
     lng1 = request.args.get('lng1', default=122.07468, type=float)
     lat2 = request.args.get('lat2', default=37.50542, type=float)
     lng2 = request.args.get('lng2', default=122.11810, type=float)
-    model_name = request.args.get('model_name', default='electric')
+    model_name = request.args.get('modal_name', default='electric')
     weight_type = request.args.get('weight_type', default='energy')
     origin_point = (lng1, lat1)  # 起点坐标
     destination_point = (lng2, lat2)  # 终点坐标

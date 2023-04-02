@@ -46,6 +46,11 @@ default_modal = Modal('default')
 modal_list = [traditional_modal, electric_modal]
 
 
+def length_weight_fn(start_node_id, end_node_id, edge):
+    highway_length = edge[0]['length']
+    return highway_length
+
+
 class PathPlanner:
     def __init__(self):
         self.modal_list = modal_list
@@ -67,16 +72,34 @@ class PathPlanner:
         destination_node = ox.nearest_nodes(G, destination_point[0], destination_point[1])  # 获取D最邻近的道路节点
         # 计算路径
         route = nx.shortest_path(G, origin_node, destination_node, weight=weight_fn)  # 请求获取最小能耗路径
-        cost = nx.shortest_path_length(G, origin_node, destination_node, weight=weight_fn)  # 并获取最小能耗
+        energy_consumption = self.path_length(G, route, weight=modal.get_weight_fn('energy'))  # 并获取最小能耗
+        time_consumption = self.path_length(G, route, weight=modal.get_weight_fn('velocity'))  # 并获取最小耗时
+        distance = self.path_length(G, route, weight=length_weight_fn)  # 并获取路径长度
+
         path = []
         for index in range(len(route) - 1):
-            node = G.nodes[route[index]]
-            path.append([node['x'], node['y']])
+            routeInfo = G[route[index]][route[index+1]][0]
+            if 'geometry' in routeInfo:
+                for coord in routeInfo['geometry'].coords:
+                    path.append([coord[0], coord[1]])
+            else:
+                node = G.nodes[route[index]]
+                path.append([node['x'], node['y']])
+
+        print({
+            'modal_name': modal_name,
+            'weight_type': weight_type,
+            'energy_consumption': round(float(energy_consumption), 3),
+            'time_consumption': round(float(time_consumption), 3),
+            'distance': round(distance, 3),
+        })
+        
         return {
             'modal_name': modal_name,
             'weight_type': weight_type,
-            'route': route,
-            'cost': float(cost),
+            'energy': round(float(energy_consumption), 3),
+            'velocity': round(float(time_consumption), 3),
+            'length': round(distance, 3),
             'path': path
         }
 
@@ -88,3 +111,10 @@ class PathPlanner:
             'route': route,
             'distance': distance
         }
+
+    @staticmethod
+    def path_length(G, route, weight):
+        cost = 0
+        for i in range(len(route)-1):
+            cost += weight(route[i], route[i + 1], G[route[i]][route[i + 1]])
+        return cost
