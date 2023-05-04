@@ -37,6 +37,25 @@ highway_type_name = dict(
 )
 
 
+class WeightFn:
+    def __init__(self, weight_fn):
+        self.consumptions = []
+
+        def fn_with_consumption(*args):
+            consumption = weight_fn(*args)
+            self.consumptions.append(consumption)
+            return consumption
+
+        self.fn = weight_fn
+        self.fn_with_consumption = fn_with_consumption
+
+    def get_consumptions(self):
+        return self.consumptions
+
+    def clear_consumptions(self):
+        self.consumptions.clear()
+
+
 class Modal:
     def __init__(self, name):
         print(f'开始创建{name}实例')
@@ -50,7 +69,7 @@ class Modal:
             return pickle.load(f)
 
     # 获取需要的权重函数
-    def get_weight_fn(self, weight_fn_type):
+    def get_weight_fn(self, weight_fn_type) -> WeightFn:
         return self.weight_fn[weight_fn_type]
 
     # 计算所所有平均消耗并进行本地化
@@ -147,7 +166,7 @@ class ElectricVehicle(Modal):
             consumption = average_consumption[operation_mode] * highway_length
             return consumption
 
-        return weight_fn
+        return WeightFn(weight_fn)
 
     # 获取不同工况的平均耗时（m/s）
     @staticmethod
@@ -167,15 +186,15 @@ class ElectricVehicle(Modal):
         average_velocity['unobstructed'] -= 15
         print(average_velocity)
 
-        def velocity_weight_fn(start_node_id, end_node_id, edge):
+        def weight_fn(start_node_id, end_node_id, edge):
             highway_type = edge[0]['highway']
             highway_length = edge[0]['length']
             # 根据传入的参数分辨所属的工况
             operation_mode = get_operation_mode(highway_type)
-            # 计算路段的能耗
+
             return highway_length / average_velocity[operation_mode]
 
-        return velocity_weight_fn
+        return WeightFn(weight_fn)
 
     # 计算所所有平均消耗并进行本地化
     def localization(self):
@@ -242,13 +261,13 @@ class TraditionalVehicle(Modal):
         average_consumption['unobstructed'] -= 0.2
         print(average_consumption)
 
-        def consumption_weight_fn(start_node_id, end_node_id, edge):
+        def weight_fn(start_node_id, end_node_id, edge):
             highway_type = edge[0]['highway']
             highway_length = edge[0]['length']
             operation_mode = get_operation_mode(highway_type)
             return average_consumption[operation_mode] * highway_length
 
-        return consumption_weight_fn
+        return WeightFn(weight_fn)
 
     # 获取不同工况的平均耗时（m/s）
     @staticmethod
@@ -267,13 +286,13 @@ class TraditionalVehicle(Modal):
         average_velocity['unobstructed'] -= 15
         print(average_velocity)
 
-        def velocity_weight_fn(start_node_id, end_node_id, edge):
+        def weight_fn(start_node_id, end_node_id, edge):
             highway_type = edge[0]['highway']
             highway_length = edge[0]['length']
             operation_mode = get_operation_mode(highway_type)
             return highway_length / average_velocity[operation_mode]
 
-        return velocity_weight_fn
+        return WeightFn(weight_fn)
 
     # 计算所所有平均消耗并进行本地化
     def localization(self):

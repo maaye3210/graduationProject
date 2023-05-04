@@ -61,38 +61,42 @@ class PathPlanner:
                 return modal
         return default_modal
 
+    # 根据起点终点计算路径以及消耗
     def get_route(self, origin_point, destination_point, modal_name, weight_type):
         modal = self.get_modal_by_name(modal_name)
         # 构造权重计算函数
         if weight_type == 'length':
             weight_fn = weight_type
         else:
-            weight_fn = modal.get_weight_fn(weight_type)
+            weight_fn = modal.get_weight_fn(weight_type).fn
+
         origin_node = ox.nearest_nodes(G, origin_point[0], origin_point[1])  # 获取O最邻近的道路节点
         destination_node = ox.nearest_nodes(G, destination_point[0], destination_point[1])  # 获取D最邻近的道路节点
-        # 计算路径
-        route = nx.shortest_path(G, origin_node, destination_node, weight=weight_fn)  # 请求获取最小能耗路径
-        energy_consumption = self.path_length(G, route, weight=modal.get_weight_fn('energy'))  # 并获取最小能耗
-        time_consumption = self.path_length(G, route, weight=modal.get_weight_fn('velocity'))  # 并获取最小耗时
-        distance = self.path_length(G, route, weight=length_weight_fn)  # 并获取路径长度
+        # 计算对应权重函数路径
+        route = nx.shortest_path(G, origin_node, destination_node, weight=weight_fn)
 
-        path = []
-        for index in range(len(route) - 1):
-            routeInfo = G[route[index]][route[index+1]][0]
-            if 'geometry' in routeInfo:
-                for coord in routeInfo['geometry'].coords:
+        # 计算最小能耗
+        energy_weight_fn = modal.get_weight_fn('energy')
+        energy_consumption = self.path_length(G, route, weight=energy_weight_fn.fn)
+        consumptions = self.path_consumptions(G, route, weight_type, energy_weight_fn.fn)
+
+        # 计算最小耗时
+        time_weight_fn = modal.get_weight_fn('velocity')
+        time_consumption = self.path_length(G, route, weight=time_weight_fn.fn)
+
+        # 计算路径长度
+        distance = self.path_length(G, route, weight=length_weight_fn)
+
+        start_node = G.nodes[route[0]]
+        path = [[start_node['x'], start_node['y']]]
+        for index in range(1, len(route)):
+            route_info = G[route[index - 1]][route[index]][0]
+            if 'geometry' in route_info:
+                for coord in route_info['geometry'].coords:
                     path.append([coord[0], coord[1]])
             else:
                 node = G.nodes[route[index]]
                 path.append([node['x'], node['y']])
-
-        print({
-            'modal_name': modal_name,
-            'weight_type': weight_type,
-            'energy_consumption': round(float(energy_consumption), 3),
-            'time_consumption': round(float(time_consumption), 3),
-            'distance': round(distance, 3),
-        })
         
         return {
             'modal_name': modal_name,
@@ -100,7 +104,8 @@ class PathPlanner:
             'energy': round(float(energy_consumption), 3),
             'velocity': round(float(time_consumption), 3),
             'length': round(distance, 3),
-            'path': path
+            'path': path,
+            'consumptions': consumptions
         }
 
     @staticmethod
@@ -118,3 +123,18 @@ class PathPlanner:
         for i in range(len(route)-1):
             cost += weight(route[i], route[i + 1], G[route[i]][route[i + 1]])
         return cost
+
+    @staticmethod
+    def path_consumptions(G, route, weight_type, weight_fn):
+        consumptions = []
+        for i in range(len(route)-1):
+            start_node_id = route[i]
+            end_node_id = route[i + 1]
+            edge = G[start_node_id][end_node_id]
+            length = edge[0]['length']
+            consumption = weight_fn(start_node_id, end_node_id, edge)
+            consumptions.append({
+                'length': length,
+                'consumption': round(float(consumption), 3)  # 路径能耗
+            })
+        return consumptions
