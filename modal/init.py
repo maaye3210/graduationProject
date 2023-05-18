@@ -2,6 +2,7 @@ import osmnx as ox
 import networkx as nx
 from modal.operating_mode import get_operation_mode_map
 from modal.modals import TraditionalVehicle, ElectricVehicle, Modal
+from utils.getbox import get_box
 
 print('start')
 file_path = './demtest/huancui_with_dem.graphml'

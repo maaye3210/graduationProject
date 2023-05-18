@@ -146,13 +146,16 @@ class ElectricVehicle(Modal):
                     consume += E_3(cur_velocity, next_velocity, cur_time, next_time)
                 else:
                     consume += E_1(cur_velocity, next_velocity, cur_time, next_time)
-            res[key] = consume / distance * 1.05
+            res[key] = (consume / distance) * 1 * 1000
         return res
 
     # 构造规划最小能耗所需的权重计算函数
     def __private_create_consumption_weight_fn(self):
         # 计算各种工况下的平均能耗（kW·h/km）
         average_consumption = self.get_average_from_local('energy')
+        average_consumption['congestion'] -= 100
+        average_consumption['normal'] -= 200
+        average_consumption['unobstructed'] -= 100
         print(average_consumption)
 
         # 权重计算函数
@@ -251,14 +254,15 @@ class TraditionalVehicle(Modal):
                 [cur_time, cur_velocity] = condition[i]
                 [next_time, next_velocity] = condition[i + 1]
                 consume += E(cur_velocity, next_velocity, cur_time, next_time)
-            res[key] = consume / distance * 3
+            res[key] = (consume / distance) * 4 * 1000
         return res
 
     # 构造规划最小能耗所需的权重计算函数
     def __private_create_consumption_weight_fn(self):
         average_consumption = self.get_average_from_local('energy')
-        average_consumption['congestion'] += 0.5
-        average_consumption['unobstructed'] -= 0.2
+        average_consumption['congestion'] += 900
+        average_consumption['normal'] += 400
+        average_consumption['unobstructed'] -= 200
         print(average_consumption)
 
         def weight_fn(start_node_id, end_node_id, edge):

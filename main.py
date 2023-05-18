@@ -1,9 +1,11 @@
 from flask import Flask
 from flask import request
 from modal.init import PathPlanner
+from flask_cors import CORS
 
 
 app = Flask(__name__)
+CORS(app)
 
 path_planner = PathPlanner()
 
@@ -46,6 +48,7 @@ def weight_route():
     weight_type = request.args.get('weight_type', default='energy')
     origin_point = (lng1, lat1)  # 起点坐标
     destination_point = (lng2, lat2)  # 终点坐标
+    print(origin_point, destination_point, model_name, weight_type)
     res = get_weight_route(origin_point, destination_point, model_name, weight_type)
     print(get_success_response(res))
     return get_success_response(res)
